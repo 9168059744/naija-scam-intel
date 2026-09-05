@@ -14,9 +14,12 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard'
 import { AdminPanel } from './components/AdminPanel'
 import { OTPVerification } from './components/OTPVerification'
 import { SecurityModal } from './components/SecurityModal'
-import { User, Scan, Report, Alert, Notification, UserProgress, Certificate, SupportedLang, OtpPending } from './types'
+import { PaymentModal } from './components/PaymentModal'
+import { BillingDashboard } from './components/BillingDashboard'
+import { User, Scan, Report, Alert, Notification, UserProgress, Certificate, SupportedLang, OtpPending, PlanTier, BillingCycle, Transaction, CreditBundle, PaymentMethod } from './types'
 import { DEFAULT_USERS, DEFAULT_REPORTS, DEFAULT_ALERTS, TRANSLATIONS } from './constants'
 import { toast } from 'sonner'
+import { CheckoutIntent, CREDIT_PACKS } from './billing'
 
 const DEMO_OTP = '123456'
 
@@ -40,6 +43,9 @@ function App() {
   const [otpPending, setOtpPending] = useState<OtpPending | null>(null)
   const [securityOpen, setSecurityOpen] = useState(false)
   const [stepUpPending, setStepUpPending] = useState<{ id: string; action: () => void } | null>(null)
+  const [billingOpen, setBillingOpen] = useState(false)
+  const [checkoutIntent, setCheckoutIntent] = useState<CheckoutIntent | null>(null)
+  const [paywallGate, setPaywallGate] = useState<string | null>(null) // 'scanner' or 'export'
 
   const t = TRANSLATIONS[lang]
 
@@ -229,6 +235,70 @@ function App() {
     setUserProgress(prev => ({ ...prev, [currentUser.id]: p }))
   }
 
+  // ===== Commercial Billing Handlers =====
+  const canScan = !currentUser || currentUser.plan === 'free' ? currentUser.credits.scans > 0 : true
+  const canExport = !currentUser || currentUser.plan === 'free' ? currentUser.credits.exports > 0 : true
+
+  const handleDeductScan = () => {
+    if (!currentUser || currentUser.plan !== 'free') return
+    const updated = { ...currentUser, credits: { ...currentUser.credits, scans: Math.max(0, currentUser.credits.scans - 1) } }
+    setCurrentUser(updated)
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+  }
+
+  const handleDeductExport = () => {
+    if (!currentUser || currentUser.plan !== 'free') return
+    const updated = { ...currentUser, credits: { ...currentUser.credits, exports: Math.max(0, currentUser.credits.exports - 1) } }
+    setCurrentUser(updated)
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+  }
+
+  const handlePaymentSuccess = (desc: string, amount: number, currency: 'NGN' | 'USD', method: PaymentMethod, plan: PlanTier, cycle: BillingCycle, bundle: CreditBundle | null) => {
+    if (!currentUser) return
+    let newCredits = { ...currentUser.credits }
+    if (bundle && bundle.scans > 0) newCredits.scans += bundle.scans
+    if (bundle && bundle.scans === 0) newCredits.exports += 30 // export packs give exports
+    const updated: User = {
+      ...currentUser,
+      plan: plan !== 'free' ? plan : currentUser.plan,
+      billing_cycle: cycle,
+      credits: newCredits,
+      subscription_expires_at: plan !== 'free' ? new Date(Date.now() + (cycle === 'yearly' ? 365 : 12) * 30 * 24 * 60 * 60 * 1000).toISOString() : currentUser.subscription_expires_at,
+      transactions: [...currentUser.transactions, {
+        id: `tx-${Date.now()}`,
+        user_id: currentUser.id,
+        description: desc,
+        amount,
+        currency,
+        payment_method: method,
+        status: 'completed',
+        invoice_url: `/invoices/${Date.now()}`,
+        created_at: new Date().toISOString(),
+      }]
+    }
+    setCurrentUser(updated)
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+    toast.success('Payment successful! Your credits have been added.')
+  }
+
+  const handleOpenCheckout = (kind: 'plan' | 'credits', plan?: PlanTier, cycle?: BillingCycle, bundleId?: string) => {
+    const bundle = bundleId ? CREDIT_PACKS.find(c => c.id === bundleId) ?? null : null
+    setCheckoutIntent({ kind, plan, cycle, bundle, originNote: kind === 'plan' ? 'Upgrade Your Plan' : 'Top-Up Credits' })
+    setBillingOpen(false) // close dashboard, open modal
+  }
+
+  const handleGateAction = (action: () => void) => {
+    if (canScan && canExport) { action(); return }
+    setPaywallGate('scanner')
+  }
+
+  const handleDeductExportFromApp = () => {
+    if (!currentUser || currentUser.plan !== 'free') return
+    const updated = { ...currentUser, credits: { ...currentUser.credits, exports: Math.max(0, currentUser.credits.exports - 1) } }
+    setCurrentUser(updated)
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+  }
+
   const handleMarkRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
   }
@@ -242,7 +312,8 @@ function App() {
           notifications={notifications} activeAlerts={alerts}
           onLogout={handleLogout} onMarkRead={handleMarkRead}
           onOpenSecurity={() => setSecurityOpen(true)}
-          onClearNotifications={() => setNotifications([])} />
+          onClearNotifications={() => setNotifications([])}
+          onOpenBilling={() => setBillingOpen(true)} />
 
         <main className="px-4 py-8">
           <AnimatePresence mode="wait">

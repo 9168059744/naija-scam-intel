@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldCheck, Bell, Sun, Moon, Globe, User, SignOut, Warning, Check, CaretDown } from '@phosphor-icons/react'
+import { ShieldCheck, Bell, Sun, Moon, Globe, User, SignOut, Warning, Check, CaretDown, Receipt, CreditCard } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -25,6 +25,7 @@ interface NavbarProps {
   onMarkRead: (id: string) => void
   onOpenSecurity: () => void
   onClearNotifications: () => void
+  onOpenBilling: () => void
 }
 
 const NAV_ITEMS = [
@@ -32,9 +33,10 @@ const NAV_ITEMS = [
   { id: 'reports', labelKey: 'reports', icon: Warning },
   { id: 'academy', labelKey: 'academy', icon: Globe },
   { id: 'analytics', labelKey: 'analytics', icon: Globe },
+  { id: 'billing', labelKey: 'profile', icon: Receipt },
 ]
 
-export function Navbar({ user, currentPage, onNavigate, lang, onLangChange, darkMode, onDarkToggle, notifications, activeAlerts, onLogout, onMarkRead, onOpenSecurity, onClearNotifications }: NavbarProps) {
+export function Navbar({ user, currentPage, onNavigate, lang, onLangChange, darkMode, onDarkToggle, notifications, activeAlerts, onLogout, onMarkRead, onOpenSecurity, onClearNotifications, onOpenBilling }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [langOpen, setLangOpen] = useState(false)
   const t = TRANSLATIONS[lang]
@@ -83,8 +85,14 @@ export function Navbar({ user, currentPage, onNavigate, lang, onLangChange, dark
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Popover open={langOpen} onOpenChange={setLangOpen}>
+                 <div className="flex items-center gap-2">
+           {user && (
+             <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={onOpenBilling}>
+               <CreditCard size={14} className="text-emerald-600 dark:text-emerald-400" />
+               <span className="hidden sm:inline">{user.credits?.scans ?? 0} scans left</span>
+             </Button>
+           )}
+           <Popover open={langOpen} onOpenChange={setLangOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium border-emerald-200/60 dark:border-zinc-700">
                 <Globe size={15} className="text-emerald-600 dark:text-emerald-400" />

@@ -2,6 +2,15 @@ import { PlanTier, BillingCycle, CreditBundle } from './types'
 
 // ===== Commercial Billing =====
 
+export type CheckoutIntent = {
+  kind: 'plan' | 'credits'
+  plan?: PlanTier
+  cycle?: BillingCycle
+  bundleId?: string
+  bundle?: CreditBundle | null
+  originNote?: string
+}
+
 export const PLANS: Record<PlanTier, {
   name: string
   tagline: string
